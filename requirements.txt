@@ -1,3 +1,7 @@
-altair
-pandas
 streamlit
+PyPDF2
+PyMuPDF
+openai
+anthropic
+aiohttp
+jinja2
