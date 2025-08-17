@@ -588,30 +588,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# Instructions de déploiement
-"""
-Pour déployer sur Streamlit Cloud:
-
-1. Créer requirements.txt:
-   streamlit
-   PyPDF2
-   PyMuPDF
-   openai
-   anthropic
-   aiohttp
-   jinja2
-
-2. Commandes locales:
-   pip install -r requirements.txt
-   streamlit run app.py
-
-3. Déploiement Streamlit Cloud:
-   - Push sur GitHub
-   - Connecter à share.streamlit.io
-   - Déploiement automatique
-
-4. Variables d'environnement (optionnel):
-   OPENAI_API_KEY=your_key
-   ANTHROPIC_API_KEY=your_key
-"""
