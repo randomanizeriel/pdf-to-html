@@ -271,7 +271,7 @@ class PDFConverterApp:
             elif self.anthropic_client:
                 st.info("Utilisation de l'API Anthropic (Claude 3.5 Sonnet)...")
                 message = await self.anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20240620",
+                    model="claude-opus-4-20250514",
                     max_tokens=2048,
                     messages=[{"role": "user", "content": final_prompt}]
                 )
