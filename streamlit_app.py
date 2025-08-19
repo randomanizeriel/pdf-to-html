@@ -5,10 +5,12 @@ Transfert de Style Neuronal HTML et PDF - Système Avancé
 Extraction et application intelligente des styles visuels entre pages web et documents PDF.
 """
 
+# --- Imports Python standard ---
 import asyncio
 import json
 import re
-import io # Ajout de l'import pour io.BytesIO
+import io
+import os  # Ajout pour les variables d'environnement
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 import logging
@@ -18,17 +20,168 @@ import hashlib
 import colorsys
 from urllib.parse import urljoin, urlparse
 import math
-import streamlit as st
 
-# --- Bibliothèques tierces ---
-# Assurez-vous que ces bibliothèques sont installées :
-# pip install aiohttp beautifulsoup4 tinycss2 webcolors PyMuPDF Pillow scikit-learn openai anthropic numpy
+# --- Streamlit (optionnel selon le contexte) ---
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    print("⚠️  Streamlit non disponible - utilisation des variables d'environnement")
+    STREAMLIT_AVAILABLE = False
 
-# Bibliothèques d'analyse web
-import aiohttp
-from bs4 import BeautifulSoup
-import tinycss2
-import webcolors
+# --- Bibliothèques d'analyse web (obligatoires) ---
+try:
+    import aiohttp
+    from bs4 import BeautifulSoup  # CORRECTION: bs4, pas beautifulsoup4
+    import tinycss2
+    import webcolors
+    WEB_ANALYSIS_AVAILABLE = True
+except ImportError as e:
+    print(f"❌ Dépendances web manquantes: {e}")
+    print("Installez avec: pip install aiohttp beautifulsoup4 tinycss2 webcolors")
+    WEB_ANALYSIS_AVAILABLE = False
+    # Définir comme None pour éviter les erreurs
+    aiohttp = None
+    BeautifulSoup = None
+    tinycss2 = None
+    webcolors = None
+
+# --- Traitement PDF (optionnel) ---
+try:
+    import fitz  # PyMuPDF
+    from PIL import Image
+    PDF_PROCESSING_AVAILABLE = True
+    print("✅ PyMuPDF et Pillow disponibles")
+except ImportError as e:
+    print(f"⚠️  Traitement PDF non disponible: {e}")
+    print("Pour le support PDF: pip install PyMuPDF Pillow")
+    PDF_PROCESSING_AVAILABLE = False
+    fitz = None
+    Image = None
+
+# --- IA et analyse (optionnel) ---
+try:
+    import openai
+    AI_OPENAI_AVAILABLE = True
+    print("✅ OpenAI disponible")
+except ImportError:
+    print("⚠️  OpenAI non disponible")
+    AI_OPENAI_AVAILABLE = False
+    openai = None
+
+try:
+    from anthropic import AsyncAnthropic
+    AI_ANTHROPIC_AVAILABLE = True
+    print("✅ Anthropic disponible")
+except ImportError:
+    print("⚠️  Anthropic non disponible")
+    AI_ANTHROPIC_AVAILABLE = False
+    AsyncAnthropic = None
+
+try:
+    import numpy as np
+    from sklearn.cluster import KMeans
+    ML_AVAILABLE = True
+    print("✅ Numpy et scikit-learn disponibles")
+except ImportError as e:
+    print(f"⚠️  Machine Learning non disponible: {e}")
+    print("Pour le clustering: pip install numpy scikit-learn")
+    ML_AVAILABLE = False
+    np = None
+    KMeans = None
+
+# --- Configuration du Logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# --- Vérification des dépendances critiques au démarrage ---
+def check_critical_dependencies():
+    """Vérifie les dépendances critiques et affiche le statut."""
+    print("\n🔍 Vérification des dépendances:")
+    
+    critical_missing = []
+    if not WEB_ANALYSIS_AVAILABLE:
+        critical_missing.append("Analyse web (aiohttp, beautifulsoup4, tinycss2, webcolors)")
+    
+    optional_missing = []
+    if not PDF_PROCESSING_AVAILABLE:
+        optional_missing.append("Traitement PDF (PyMuPDF, Pillow)")
+    if not AI_OPENAI_AVAILABLE:
+        optional_missing.append("OpenAI")
+    if not AI_ANTHROPIC_AVAILABLE:
+        optional_missing.append("Anthropic")
+    if not ML_AVAILABLE:
+        optional_missing.append("Machine Learning (numpy, scikit-learn)")
+    if not STREAMLIT_AVAILABLE:
+        optional_missing.append("Streamlit")
+    
+    if critical_missing:
+        print("❌ Dépendances CRITIQUES manquantes:")
+        for dep in critical_missing:
+            print(f"   - {dep}")
+        return False
+    
+    print("✅ Toutes les dépendances critiques sont disponibles")
+    
+    if optional_missing:
+        print("⚠️  Dépendances optionnelles manquantes:")
+        for dep in optional_missing:
+            print(f"   - {dep}")
+    
+    return True
+
+# --- Configuration des clés API ---
+def get_ai_config() -> Dict[str, str]:
+    """Récupère la configuration des clés API selon le contexte."""
+    
+    if STREAMLIT_AVAILABLE and hasattr(st, 'secrets'):
+        # Contexte Streamlit
+        try:
+            return {
+                'openai_api_key': st.secrets.get("openai_api_key", ""),
+                'anthropic_api_key': st.secrets.get("anthropic_api_key", "")
+            }
+        except Exception as e:
+            logger.warning(f"Impossible de lire les secrets Streamlit: {e}")
+    
+    # Contexte standalone - utiliser variables d'environnement
+    return {
+        'openai_api_key': os.getenv('OPENAI_API_KEY', ''),
+        'anthropic_api_key': os.getenv('ANTHROPIC_API_KEY', '')
+    }
+
+# --- Instructions d'installation ---
+INSTALLATION_INSTRUCTIONS = """
+📦 Instructions d'installation complète:
+
+# Dépendances critiques (obligatoires)
+pip install aiohttp beautifulsoup4 tinycss2 webcolors
+
+# Dépendances optionnelles
+pip install PyMuPDF Pillow                    # Support PDF
+pip install openai anthropic                  # IA
+pip install numpy scikit-learn               # Machine Learning
+pip install streamlit                         # Interface web
+
+# Installation complète
+pip install aiohttp beautifulsoup4 tinycss2 webcolors PyMuPDF Pillow openai anthropic numpy scikit-learn streamlit
+
+🔑 Configuration des clés API:
+
+# Variables d'environnement (recommandé)
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Ou dans Streamlit secrets.toml
+openai_api_key = "sk-..."
+anthropic_api_key = "sk-ant-..."
+"""
+
+# Affichage des instructions si des dépendances manquent
+if __name__ == "__main__":
+    if not check_critical_dependencies():
+        print(INSTALLATION_INSTRUCTIONS)
+        exit(1)
 
 # Traitement PDF (PyMuPDF)
 try:
@@ -557,36 +710,64 @@ class WebStyleAnalyzer:
         # Cette fonction nécessiterait une logique complexe pour mapper les styles
         # aux éléments sémantiques (ex: trouver le bouton principal et lui appliquer la couleur primaire).
         pass
-
-# --- Point d'Entrée pour l'Exécution ---
 async def main():
     """Fonction principale pour tester l'analyseur."""
-    # Mettez vos clés API ici
-    ai_config = {
-        'openai_api_key': st.secrets["votre-cle-openai"],
-        'anthropic_api_key': st.secrets["votre-cle-anthropic"]
-    }
+    print("🚀 Démarrage de l'analyseur de style web...")
+    
+    # Vérification des dépendances
+    if not check_critical_dependencies():
+        print("\n❌ Impossible de continuer sans les dépendances critiques")
+        return
+    
+    # Configuration des clés API
+    ai_config = get_ai_config()
+    
+    # Vérification et affichage du statut des clés API
+    openai_configured = bool(ai_config.get('openai_api_key'))
+    anthropic_configured = bool(ai_config.get('anthropic_api_key'))
+    
+    print(f"\n🔑 Configuration API:")
+    print(f"   OpenAI: {'✅ Configuré' if openai_configured else '❌ Non configuré'}")
+    print(f"   Anthropic: {'✅ Configuré' if anthropic_configured else '❌ Non configuré'}")
+    
+    if not openai_configured and not anthropic_configured:
+        print("\n⚠️  Aucune clé API configurée. L'analyse IA sera limitée.")
+        print("Pour configurer :")
+        print("   export OPENAI_API_KEY='sk-...'")
+        print("   export ANTHROPIC_API_KEY='sk-ant-...'")
 
-    # Exemple d'analyse d'une URL
-    target_url = "https://www.google.com"
+    # Test d'analyse
+    target_url = "https://httpbin.org/html"  # URL de test simple
+    
     try:
         async with WebStyleAnalyzer(ai_config) as analyzer:
-            print(f"Analyse de l'URL : {target_url}")
+            print(f"\n🔍 Analyse de l'URL : {target_url}")
             fingerprint = await analyzer.analyze_reference_page(target_url, is_url=True, is_pdf=False)
-            print("\n--- Empreinte Stylistique ---")
-            print(f"Palette de couleurs: {fingerprint.color_palette}")
-            print(f"Typographie: {fingerprint.typography}")
-            print(f"Ambiance du design: {fingerprint.design_mood}")
-            print(f"Score de confiance: {fingerprint.confidence_score}")
+            
+            print("\n--- ✅ Empreinte Stylistique ---")
+            print(f"🎨 Palette de couleurs ({len(fingerprint.color_palette)} couleurs): {fingerprint.color_palette[:5]}{'...' if len(fingerprint.color_palette) > 5 else ''}")
+            print(f"📝 Polices trouvées: {len(fingerprint.typography.get('font_families', []))}")
+            print(f"🎭 Ambiance du design: {fingerprint.design_mood}")
+            print(f"📊 Score de confiance: {fingerprint.confidence_score}")
+            
+            if fingerprint.metadata_profile:
+                print(f"📄 Titre: {fingerprint.metadata_profile.get('title', 'N/A')[:50]}...")
+            
+            print(f"\n📈 Statistiques:")
+            print(f"   - Breakpoints responsive: {len(fingerprint.responsive_breakpoints)}")
+            print(f"   - Règles CSS détectées: {fingerprint.css_rules.get('rule_count', 0)}")
+            
     except (ValueError, ImportError) as e:
-        print(f"\nErreur: {e}")
+        print(f"\n❌ Erreur de configuration: {e}")
     except Exception as e:
-        print(f"\nUne erreur inattendue est survenue: {e}")
+        print(f"\n💥 Erreur inattendue: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    # Vérification des dépendances critiques
-    if not all([aiohttp, BeautifulSoup, tinycss2, webcolors]):
-        logger.critical("Dépendances de base manquantes. Veuillez installer les paquets requis.")
-    else:
+    if WEB_ANALYSIS_AVAILABLE:
         asyncio.run(main())
+    else:
+        print("❌ Impossible de démarrer sans les dépendances critiques")
+        print(INSTALLATION_INSTRUCTIONS)
 
