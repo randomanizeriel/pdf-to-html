@@ -89,8 +89,8 @@ class WebStyleAnalyzer:
     _COLOR_HSL_PATTERN = re.compile(r'hsl\(\s*(\d+)\s*,\s*([\d.]+%)\s*,\s*([\d.]+%)\s*\)')
     _COLOR_HSLA_PATTERN = re.compile(r'hsla\(\s*(\d+)\s*,\s*([\d.]+%)\s*,\s*([\d.]+%)\s*,\s*([0-9.]+)\s*\)')
     _COLOR_KEYWORDS_PATTERN = re.compile(r'\b(transparent|currentColor|inherit|initial|unset|revert)\b', re.IGNORECASE)
-    # CORRECTION 1, 4, 7: Utilisation de l'attribut correct \`CSS3_NAMES_TO_HEX\` (majuscules)
-    _COLOR_NAMES_PATTERN = re.compile(r'\b(' + '|'.join(webcolors.CSS3_NAMES_TO_HEX.keys()) + r')\b', re.IGNORECASE)
+    # CORRECTION 1, 4, 7: Utilisation de l'attribut correct \`CSS3_NAMES_TO_NAMES\` (majuscules)
+    _COLOR_NAMES_PATTERN = re.compile(r'\b(' + '|'.join(webcolors.CSS3_NAMES_TO_NAMES.keys()) + r')\b', re.IGNORECASE)
 
     # Patterns pour la typographie
     _FONT_FAMILY_PATTERN = re.compile(r'font-family\s*:\s*([^;]+)', re.IGNORECASE)
@@ -345,8 +345,8 @@ class WebStyleAnalyzer:
         for m in self._COLOR_NAMES_PATTERN.finditer(text_to_scan):
             color_name = m.group(1).lower()
             # CORRECTION 7: Cohérence de l'attribut
-            if color_name in webcolors.CSS3_NAMES_TO_HEX:
-                colors.add(webcolors.CSS3_NAMES_TO_HEX[color_name])
+            if color_name in webcolors.CSS3_NAMES_TO_NAMES:
+                colors.add(webcolors.CSS3_NAMES_TO_NAMES[color_name])
 
         # CORRECTION 19: Retourner une liste vide au lieu de None
         if not colors:
@@ -374,7 +374,7 @@ class WebStyleAnalyzer:
             for match in self._FONT_FAMILY_PATTERN.finditer(css)
             for family in match.group(1).split(',')
         )
-        
+
         # CORRECTION 24: Protection contre la division par zéro
         headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
         avg_heading_length = 0
@@ -447,9 +447,9 @@ class WebStyleAnalyzer:
         if 3 <= color_count <= 10: factors['color_palette'] = 1.0
         elif color_count > 10: factors['color_palette'] = 0.7
         else: factors['color_palette'] = 0.5
-        
+
         # ... autres facteurs ...
-        
+
         if not factors: return 0.0
         return round(sum(factors.values()) / len(factors), 2)
 
@@ -459,10 +459,10 @@ class WebStyleAnalyzer:
         color_count = len(pdf_analysis_data.get('color_palette', []))
         if color_count > 2: factors['colors'] = 1.0
         else: factors['colors'] = 0.5
-        
+
         if pdf_analysis_data.get('text_content', ''): factors['text'] = 1.0
         else: factors['text'] = 0.2
-        
+
         if not factors: return 0.0
         return round(sum(factors.values()) / len(factors), 2)
 
@@ -473,11 +473,11 @@ class WebStyleAnalyzer:
         try:
             doc = fitz.open(stream=pdf_data, filetype="pdf")
             text_content = "".join(page.get_text() for page in doc)
-            
+
             # CORRECTION 26: Optimisation - analyse d'un sous-ensemble de pages
             page_count = len(doc)
             pages_to_analyze = doc if page_count <= 5 else [doc[i] for i in range(5)]
-            
+
             image_colors = set()
             image_count = 0
             for page in pages_to_analyze:
@@ -486,14 +486,14 @@ class WebStyleAnalyzer:
                     xref = img_info[0]
                     base_image = doc.extract_image(xref)
                     image_bytes = base_image["image"]
-                    
+
                     # CORRECTION 12: Gestion d'exception pour le traitement d'image
                     try:
                         img = Image.open(io.BytesIO(image_bytes))
                         if img.mode == 'RGBA': img = img.convert('RGB')
                         img.thumbnail((150, 150))
                         pixels = np.array(img).reshape(-1, 3)
-                        
+
                         n_clusters = min(5, len(np.unique(pixels, axis=0)))
                         if n_clusters > 1:
                             kmeans = KMeans(n_clusters=n_clusters, random_state=42)
@@ -523,7 +523,7 @@ class WebStyleAnalyzer:
         logger.info("Application du transfert de style (stub).")
         css_rules = self._generate_transfer_css(fingerprint)
         soup = BeautifulSoup(target_html, 'html.parser')
-        
+
         # Ajouter les nouvelles règles CSS
         new_style_tag = soup.new_tag('style')
         new_style_tag.string = css_rules
@@ -531,10 +531,10 @@ class WebStyleAnalyzer:
             soup.head.append(new_style_tag)
         else:
             soup.insert(0, soup.new_tag('head').append(new_style_tag))
-            
+
         # Appliquer des classes de transfert (logique à implémenter)
         self._apply_transfer_classes(soup, fingerprint)
-        
+
         return str(soup)
 
     def _generate_transfer_css(self, fingerprint: StyleFingerprint) -> str:
