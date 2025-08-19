@@ -18,6 +18,7 @@ import hashlib
 import colorsys
 from urllib.parse import urljoin, urlparse
 import math
+import streamlit as st
 
 # --- Bibliothèques tierces ---
 # Assurez-vous que ces bibliothèques sont installées :
