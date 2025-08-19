@@ -89,8 +89,8 @@ class WebStyleAnalyzer:
     _COLOR_HSL_PATTERN = re.compile(r'hsl\(\s*(\d+)\s*,\s*([\d.]+%)\s*,\s*([\d.]+%)\s*\)')
     _COLOR_HSLA_PATTERN = re.compile(r'hsla\(\s*(\d+)\s*,\s*([\d.]+%)\s*,\s*([\d.]+%)\s*,\s*([0-9.]+)\s*\)')
     _COLOR_KEYWORDS_PATTERN = re.compile(r'\b(transparent|currentColor|inherit|initial|unset|revert)\b', re.IGNORECASE)
-    # CORRECTION 1, 4, 7: Utilisation de l'attribut correct \`CSS3_NAMES_TO_NAMES\` (majuscules)
-    _COLOR_NAMES_PATTERN = re.compile(r'\b(' + '|'.join(webcolors.CSS3_NAMES_TO_NAMES.keys()) + r')\b', re.IGNORECASE)
+    # CORRECTION 1, 4, 7: Utilisation de l'attribut correct \`CSS3_HEX_TO_NAMES\` (majuscules)
+    _COLOR_NAMES_PATTERN = re.compile(r'\b(' + '|'.join(webcolors.CSS3_HEX_TO_NAMES.keys()) + r')\b', re.IGNORECASE)
 
     # Patterns pour la typographie
     _FONT_FAMILY_PATTERN = re.compile(r'font-family\s*:\s*([^;]+)', re.IGNORECASE)
@@ -345,8 +345,8 @@ class WebStyleAnalyzer:
         for m in self._COLOR_NAMES_PATTERN.finditer(text_to_scan):
             color_name = m.group(1).lower()
             # CORRECTION 7: Cohérence de l'attribut
-            if color_name in webcolors.CSS3_NAMES_TO_NAMES:
-                colors.add(webcolors.CSS3_NAMES_TO_NAMES[color_name])
+            if color_name in webcolors.CSS3_HEX_TO_NAMES:
+                colors.add(webcolors.CSS3_HEX_TO_NAMES[color_name])
 
         # CORRECTION 19: Retourner une liste vide au lieu de None
         if not colors:
