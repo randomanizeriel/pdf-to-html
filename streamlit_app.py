@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 Transfert de Style Neuronal HTML et PDF - Système Avancé
 Extraction et application intelligente des styles visuels entre pages web et documents PDF.
@@ -7,6 +8,7 @@ Extraction et application intelligente des styles visuels entre pages web et doc
 import asyncio
 import json
 import re
+import io # Ajout de l'import pour io.BytesIO
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 import logging
@@ -49,11 +51,9 @@ except ImportError:
     np = None
     KMeans = None
 
-
 # --- Configuration du Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
 
 # --- Structures de Données ---
 
@@ -75,7 +75,6 @@ class StyleFingerprint:
     pdf_page_count: Optional[int] = None
     pdf_image_count: Optional[int] = None
 
-
 # --- Classe Principale d'Analyse ---
 
 class WebStyleAnalyzer:
@@ -89,7 +88,7 @@ class WebStyleAnalyzer:
     _COLOR_HSL_PATTERN = re.compile(r'hsl\(\s*(\d+)\s*,\s*([\d.]+%)\s*,\s*([\d.]+%)\s*\)')
     _COLOR_HSLA_PATTERN = re.compile(r'hsla\(\s*(\d+)\s*,\s*([\d.]+%)\s*,\s*([\d.]+%)\s*,\s*([0-9.]+)\s*\)')
     _COLOR_KEYWORDS_PATTERN = re.compile(r'\b(transparent|currentColor|inherit|initial|unset|revert)\b', re.IGNORECASE)
-    # CORRECTION 1, 4, 7: Utilisation de l'attribut correct \`CSS3_HEX_TO_NAMES\` (majuscules)
+    # CORRECTION 1, 4, 7: Utilisation de l'attribut correct `CSS3_HEX_TO_NAMES` (majuscules)
     _COLOR_NAMES_PATTERN = re.compile(r'\b(' + '|'.join([webcolors.name_to_hex(name, spec='css3') for name in webcolors.names("css3")]
 ) + r')\b', re.IGNORECASE)
 
@@ -349,10 +348,10 @@ class WebStyleAnalyzer:
             try:
                 name = webcolors.hex_to_name(color_name, spec='css3')
                 colors.add(name)
-             except ValueError:
+            except ValueError:
                 # color_name n'est pas une couleur nommée CSS3 ; ignorez ou gérez autrement
                 pass
-     
+    
         # CORRECTION 19: Retourner une liste vide au lieu de None
         if not colors:
             return []
@@ -364,8 +363,8 @@ class WebStyleAnalyzer:
 
         pixels = np.array(hex_colors_for_clustering)
         n_clusters = min(8, len(pixels))
-        # CORRECTION 8: Paramètre \`n_init\` géré automatiquement par les versions récentes
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        # CORRECTION 8: Paramètre `n_init` géré automatiquement par les versions récentes
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto') # Ajout de n_init='auto'
         kmeans.fit(pixels)
         dominant_colors = [webcolors.rgb_to_hex(tuple(map(int, center))) for center in kmeans.cluster_centers_]
         return sorted(dominant_colors)
@@ -501,7 +500,7 @@ class WebStyleAnalyzer:
 
                         n_clusters = min(5, len(np.unique(pixels, axis=0)))
                         if n_clusters > 1:
-                            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+                            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto') # Ajout de n_init='auto'
                             kmeans.fit(pixels)
                             for center in kmeans.cluster_centers_:
                                 image_colors.add(webcolors.rgb_to_hex(tuple(map(int, center))))
@@ -535,7 +534,9 @@ class WebStyleAnalyzer:
         if soup.head:
             soup.head.append(new_style_tag)
         else:
-            soup.insert(0, soup.new_tag('head').append(new_style_tag))
+            soup.insert(0, soup.new_tag('head')) # Correction ici : créez le head s'il n'existe pas
+            soup.head.append(new_style_tag) # Ajoutez le style après avoir créé le head
+
 
         # Appliquer des classes de transfert (logique à implémenter)
         self._apply_transfer_classes(soup, fingerprint)
@@ -546,7 +547,7 @@ class WebStyleAnalyzer:
         """(Stub) Génère une feuille de style CSS à partir d'une empreinte."""
         css = "/* --- Feuille de Style Générée --- */\n"
         if fingerprint.color_palette:
-            css += f":root {{\n  --primary-color: {fingerprint.color_palette[0]};\n}}\n"
+            css += f":root {{\n    --primary-color: {fingerprint.color_palette[0]};\n}}\n"
         # ... plus de règles ...
         return css
 
@@ -587,3 +588,4 @@ if __name__ == "__main__":
         logger.critical("Dépendances de base manquantes. Veuillez installer les paquets requis.")
     else:
         asyncio.run(main())
+
