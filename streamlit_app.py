@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Transfert de Style Neuronal - Interface Streamlit
-Application interactive pour l'extraction et l'application de styles visuels
+PDF to HTML Converter - Version Intégrée avec Transfert de Style Neuronal
+Application Streamlit complète pour convertir des PDF en HTML optimisé SEO/AEO,
+avec la capacité d'appliquer un style visuel extrait d'une page web de référence.
 """
 
+# --- Imports Standard et Essentiels ---
 import streamlit as st
 import asyncio
 import json
@@ -12,721 +14,529 @@ import base64
 from pathlib import Path
 from datetime import datetime
 import logging
+import re
+import io
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
-import io
-import os
-import re
-import colorsys
 from urllib.parse import urljoin, urlparse
-import hashlib
+import colorsys
 
-# Configuration de la page Streamlit
+# --- Configuration de la Page Streamlit (doit être la première commande st) ---
 st.set_page_config(
-    page_title="Neural Style Transfer",
+    page_title="PDF to HTML Style Converter",
     page_icon="🎨",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Styles CSS personnalisés
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(90deg, #ff6b6b 0%, #ee5a52 50%, #ff8e8e 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 5px solid #ff6b6b;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        transition: transform 0.3s ease;
-    }
-    .metric-card:hover {
-        transform: translateY(-5px);
-    }
-    .success-box {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        border: 2px solid #28a745;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
-    }
-    .warning-box {
-        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-        border: 2px solid #ffc107;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
-    }
-    .info-box {
-        background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
-        border: 2px solid #17a2b8;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 15px rgba(23, 162, 184, 0.2);
-    }
-    .code-container {
-        background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
-        color: #e2e8f0;
-        padding: 1.5rem;
-        border-radius: 12px;
-        font-family: 'JetBrains Mono', 'Courier New', monospace;
-        max-height: 400px;
-        overflow-y: auto;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    }
-    .color-palette {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 10px 0;
-    }
-    .color-swatch {
-        width: 40px;
-        height: 40px;
-        border-radius: 8px;
-        border: 2px solid #fff;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        display: inline-block;
-    }
-    .fingerprint-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        margin: 1rem 0;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-    }
-    .stat-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Import des bibliothèques nécessaires avec gestion d'erreur
-@st.cache_data
-def check_dependencies():
-    """Vérifie les dépendances critiques"""
-    missing_deps = []
-    available_features = {
-        'web_analysis': False,
-        'pdf_processing': False,
-        'ai_openai': False,
-        'ai_anthropic': False,
-        'ml_clustering': False
-    }
-    
-    try:
-        import aiohttp
-        from bs4 import BeautifulSoup
-        import tinycss2
-        import webcolors
-        available_features['web_analysis'] = True
-    except ImportError:
-        missing_deps.append("Analyse web (aiohttp, beautifulsoup4, tinycss2, webcolors)")
-    
-    try:
-        import fitz
-        from PIL import Image
-        available_features['pdf_processing'] = True
-    except ImportError:
-        missing_deps.append("Traitement PDF (PyMuPDF, Pillow)")
-    
-    try:
-        import openai
-        available_features['ai_openai'] = True
-    except ImportError:
-        missing_deps.append("OpenAI")
-    
-    try:
-        from anthropic import AsyncAnthropic
-        available_features['ai_anthropic'] = True
-    except ImportError:
-        missing_deps.append("Anthropic")
-    
-    try:
-        import numpy as np
-        from sklearn.cluster import KMeans
-        available_features['ml_clustering'] = True
-    except ImportError:
-        missing_deps.append("Machine Learning (numpy, scikit-learn)")
-    
-    return available_features, missing_deps
-
-# Vérification des dépendances au démarrage
-FEATURES, MISSING_DEPS = check_dependencies()
-
-# Import conditionnel des bibliothèques
-if FEATURES['web_analysis']:
+# --- Dépendances Majeures (avec gestion d'erreurs) ---
+try:
     import aiohttp
     from bs4 import BeautifulSoup
     import tinycss2
     import webcolors
-
-if FEATURES['pdf_processing']:
-    import fitz
+    import fitz  # PyMuPDF
     from PIL import Image
-
-if FEATURES['ai_openai']:
-    import openai
-
-if FEATURES['ai_anthropic']:
-    from anthropic import AsyncAnthropic
-
-if FEATURES['ml_clustering']:
     import numpy as np
     from sklearn.cluster import KMeans
+    import openai
+    from anthropic import AsyncAnthropic
+    from jinja2 import Template
+except ImportError as e:
+    st.error(f"Une bibliothèque essentielle est manquante : {e}")
+    st.error("Veuillez installer toutes les dépendances requises avec la commande suivante :")
+    st.code("pip install streamlit aiohttp beautifulsoup4 tinycss2 webcolors PyMuPDF Pillow numpy scikit-learn openai anthropic jinja2", language="bash")
+    st.stop()
+
+# --- Configuration du Logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+# --- SECTION 1: BIBLIOTHÈQUE D'ANALYSE DE STYLE (Intégration du 2ème script) ---
 
 @dataclass
 class StyleFingerprint:
-    """Empreinte stylistique d'une page web ou d'un document PDF."""
+    """Empreinte stylistique extraite d'une page web."""
     color_palette: List[str]
     typography: Dict[str, Any]
-    layout_patterns: Dict[str, Any]
-    spacing_system: Dict[str, Any]
-    visual_hierarchy: Dict[str, Any]
-    branding_elements: Dict[str, Any]
-    responsive_breakpoints: List[int]
-    css_rules: Dict[str, Any]
-    metadata_profile: Dict[str, Any]
-    design_mood: str
-    confidence_score: float
-    pdf_text_content: Optional[str] = None
-    pdf_page_count: Optional[int] = None
-    pdf_image_count: Optional[int] = None
+    design_mood: str = "N/A"
+    confidence_score: float = 0.0
 
-class StyleTransferApp:
-    """Application Streamlit pour le transfert de style"""
-    
-    def __init__(self, openai_key: str = None, anthropic_key: str = None):
-        self.openai_client = None
-        self.anthropic_client = None
-        
-        if openai_key and FEATURES['ai_openai']:
-            self.openai_client = openai.AsyncOpenAI(api_key=openai_key)
-        if anthropic_key and FEATURES['ai_anthropic']:
-            self.anthropic_client = AsyncAnthropic(api_key=anthropic_key)
-    
-    async def analyze_reference_page(self, source_input: str, is_url: bool = True, is_pdf: bool = False) -> Optional[StyleFingerprint]:
-        """Analyse une page de référence ou un document PDF"""
-        if not FEATURES['web_analysis'] and not is_pdf:
-            st.error("Les dépendances d'analyse web ne sont pas installées")
-            return None
-        
-        if is_pdf and not FEATURES['pdf_processing']:
-            st.error("Les dépendances de traitement PDF ne sont pas installées")
-            return None
-        
-        try:
-            if is_pdf:
-                return await self._analyze_pdf_source(source_input, is_url)
-            else:
-                return await self._analyze_html_source(source_input, is_url)
-        except Exception as e:
-            st.error(f"Erreur lors de l'analyse: {e}")
-            return None
-    
-    async def _analyze_html_source(self, source_input: str, is_url: bool) -> StyleFingerprint:
-        """Analyse une source HTML"""
-        if is_url:
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.get(source_input, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                        response.raise_for_status()
-                        html_content = await response.text()
-                except Exception as e:
-                    raise ValueError(f"Impossible de récupérer la page: {e}")
-        else:
-            html_content = source_input
+class WebStyleAnalyzer:
+    """
+    Analyseur de style web. Extrait les couleurs et la typographie d'une URL
+    pour créer une empreinte stylistique.
+    """
+    _COLOR_HEX_PATTERN = re.compile(r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\b')
+    _COLOR_RGB_PATTERN = re.compile(r'rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)')
+    _FONT_FAMILY_PATTERN = re.compile(r'font-family\s*:\s*([^;]+)', re.IGNORECASE)
+
+    def __init__(self, openai_key: Optional[str] = None, anthropic_key: Optional[str] = None):
+        self.openai_client = openai.AsyncOpenAI(api_key=openai_key) if openai_key else None
+        self.anthropic_client = AsyncAnthropic(api_key=anthropic_key) if anthropic_key else None
+        self.session = None
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30),
+            headers={'User-Agent': 'Mozilla/5.0 (compatible; StyleAnalyzer/1.0)'}
+        )
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def analyze_reference_page(self, url: str) -> StyleFingerprint:
+        """Analyse complète d'une page de référence."""
+        logger.info(f"Début de l'analyse de style pour l'URL : {url}")
+        html_content, css_contents = await self._fetch_page_with_resources(url)
         
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Simulation d'analyse (version simplifiée pour la démo)
-        color_palette = self._extract_colors_simple(html_content)
-        typography = self._extract_typography_simple(soup)
-        
+        color_palette = self._extract_color_palette(css_contents, soup)
+        typography = self._analyze_typography(css_contents)
+
         return StyleFingerprint(
             color_palette=color_palette,
             typography=typography,
-            layout_patterns={'type': 'responsive'},
-            spacing_system={'base_unit': 8},
-            visual_hierarchy={'heading_levels': len(soup.find_all(['h1', 'h2', 'h3']))},
-            branding_elements={'logo_found': bool(soup.find('img', alt=re.compile(r'logo', re.I)))},
-            responsive_breakpoints=[768, 1024],
-            css_rules={'rule_count': html_content.count('{')},
-            metadata_profile={
-                'title': soup.title.string if soup.title else "N/A",
-                'description': "Analysé automatiquement"
-            },
-            design_mood='modern',
-            confidence_score=0.85
+            confidence_score=self._calculate_confidence(color_palette, typography)
         )
-    
-    async def _analyze_pdf_source(self, source_input: str, is_url: bool) -> StyleFingerprint:
-        """Analyse une source PDF"""
-        if is_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(source_input) as response:
-                    pdf_data = await response.read()
-        else:
-            with open(source_input, 'rb') as f:
-                pdf_data = f.read()
+
+    async def _fetch_page_with_resources(self, url: str) -> Tuple[str, List[str]]:
+        """Récupère la page et ses ressources CSS."""
+        try:
+            async with self.session.get(url) as response:
+                response.raise_for_status()
+                html_content = await response.text(encoding='utf-8', errors='replace')
+        except aiohttp.ClientError as e:
+            raise ValueError(f"Impossible de récupérer la page principale {url}: {e}")
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        css_links = [link.get('href') for link in soup.find_all('link', rel='stylesheet') if link.get('href')]
         
-        doc = fitz.open(stream=pdf_data, filetype="pdf")
-        text_content = ""
-        page_count = len(doc)
+        tasks = []
+        for href in css_links[:15]:  # Limiter à 15 fichiers CSS
+            css_url = urljoin(url, href)
+            tasks.append(self._fetch_resource(css_url))
         
-        for page in doc:
-            text_content += page.get_text()
+        css_results = await asyncio.gather(*tasks)
         
-        doc.close()
+        all_css = [res for res in css_results if res]
+        all_css.extend(style.string for style in soup.find_all('style') if style.string)
         
-        return StyleFingerprint(
-            color_palette=['#000000', '#333333'],
-            typography={'font_families': ['Times', 'Arial']},
-            layout_patterns={'type': 'PDF Document'},
-            spacing_system={'type': 'N/A'},
-            visual_hierarchy={'type': 'Document'},
-            branding_elements={'type': 'N/A'},
-            responsive_breakpoints=[],
-            css_rules={},
-            metadata_profile={'source_type': 'PDF'},
-            design_mood='document',
-            confidence_score=0.7,
-            pdf_text_content=text_content[:1000],
-            pdf_page_count=page_count,
-            pdf_image_count=0
-        )
-    
-    def _extract_colors_simple(self, html_content: str) -> List[str]:
-        """Extraction simple des couleurs"""
-        color_pattern = re.compile(r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})')
-        colors = list(set(color_pattern.findall(html_content)))
-        return [f"#{color}" for color in colors[:8]]
-    
-    def _extract_typography_simple(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """Extraction simple de la typographie"""
-        return {
-            'font_families': ['Arial', 'Helvetica', 'sans-serif'],
-            'heading_count': len(soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']))
-        }
-    
-    async def apply_style_transfer(self, target_html: str, fingerprint: StyleFingerprint) -> str:
-        """Applique le transfert de style"""
-        soup = BeautifulSoup(target_html, 'html.parser')
+        return html_content, all_css
+
+    async def _fetch_resource(self, url: str) -> Optional[str]:
+        """Récupère une ressource CSS."""
+        try:
+            async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                response.raise_for_status()
+                return await response.text(encoding='utf-8', errors='replace')
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer la ressource {url}: {e}")
+            return None
+
+    def _extract_color_palette(self, css_contents: List[str], soup: BeautifulSoup) -> List[str]:
+        """Extraction de la palette de couleurs."""
+        colors = set()
+        text_to_scan = "\n".join(css_contents)
+        for element in soup.find_all(style=True):
+            text_to_scan += ";" + element['style']
+
+        colors.update(m.group(0).lower() for m in self._COLOR_HEX_PATTERN.finditer(text_to_scan))
+        for m in self._COLOR_RGB_PATTERN.finditer(text_to_scan):
+            try:
+                colors.add(webcolors.rgb_to_hex((int(m.group(1)), int(m.group(2)), int(m.group(3)))))
+            except ValueError:
+                pass
+
+        if not colors:
+            return []
+
+        hex_colors_for_clustering = [webcolors.hex_to_rgb(c) for c in colors if len(c) == 7]
+        if len(hex_colors_for_clustering) < 3:
+            return sorted(list(colors))[:10]
+
+        pixels = np.array(hex_colors_for_clustering)
+        n_clusters = min(8, len(pixels))
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto').fit(pixels)
+        dominant_colors = [webcolors.rgb_to_hex(tuple(map(int, center))) for center in kmeans.cluster_centers_]
+        return sorted(dominant_colors)
+
+    def _analyze_typography(self, css_contents: List[str]) -> Dict[str, Any]:
+        """Analyse la typographie."""
+        fonts = set()
+        for css in css_contents:
+            for match in self._FONT_FAMILY_PATTERN.finditer(css):
+                for family in match.group(1).split(','):
+                    font = family.strip().strip("'\"").lower()
+                    if font and font not in ['inherit', 'initial', 'sans-serif', 'serif', 'monospace']:
+                        fonts.add(font.capitalize())
+        return {'font_families': sorted(list(fonts))}
+
+    def _calculate_confidence(self, palette: List, typo: Dict) -> float:
+        """Calcule un score de confiance simple."""
+        score = 0.0
+        if len(palette) >= 3:
+            score += 0.5
+        if len(typo.get('font_families', [])) >= 1:
+            score += 0.5
+        return score
+
+    def _is_light(self, hex_color: str) -> bool:
+        """Détermine si une couleur est claire ou foncée pour le contraste."""
+        try:
+            h = hex_color.lstrip('#')
+            rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+            brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000
+            return brightness > 140
+        except:
+            return True
+
+    def generate_transfer_css(self, fingerprint: StyleFingerprint) -> str:
+        """Génère une feuille de style CSS à partir de l'empreinte."""
+        if fingerprint.confidence_score < 0.4:
+            return "/* Confiance d'analyse de style trop faible. */"
+
+        css = "/* --- Feuille de Style Transférée --- */\n"
         
-        # Génération du CSS de transfert
-        transfer_css = self._generate_transfer_css(fingerprint)
-        
-        # Ajout du CSS au document
-        if not soup.head:
-            soup.insert(0, soup.new_tag('head'))
-        
-        style_tag = soup.new_tag('style')
-        style_tag.string = transfer_css
-        soup.head.append(style_tag)
-        
-        return str(soup)
-    
-    def _generate_transfer_css(self, fingerprint: StyleFingerprint) -> str:
-        """Génère le CSS de transfert"""
-        css = "/* Style Transfer CSS */\n"
-        
+        # Variables de couleur
+        css += ":root {\n"
         if fingerprint.color_palette:
-            css += ":root {\n"
-            for i, color in enumerate(fingerprint.color_palette[:5]):
-                css += f"    --color-{i+1}: {color};\n"
-            css += "}\n\n"
+            primary_color = fingerprint.color_palette[0]
+            text_color = '#212529' if self._is_light(primary_color) else '#f8f9fa'
+            bg_color = '#ffffff' if self._is_light(primary_color) else '#212529'
             
-            css += "body { color: var(--color-1); }\n"
-            css += "h1, h2, h3 { color: var(--color-2); }\n"
-            css += "a { color: var(--color-3); }\n"
+            css += f"    --theme-primary: {primary_color};\n"
+            css += f"    --theme-secondary: {fingerprint.color_palette[1] if len(fingerprint.color_palette) > 1 else '#6c757d'};\n"
+            css += f"    --theme-bg: {bg_color};\n"
+            css += f"    --theme-text: {text_color};\n"
+            css += f"    --theme-link: {fingerprint.color_palette[2] if len(fingerprint.color_palette) > 2 else primary_color};\n"
+        css += "}\n\n"
+
+        # Styles de base
+        css += "body.style-transferred {\n"
+        if fingerprint.typography.get('font_families'):
+            font_stack = ", ".join([f"'{f}'" for f in fingerprint.typography['font_families'][:2]])
+            css += f"    font-family: {font_stack}, sans-serif;\n"
+        css += "    background-color: var(--theme-bg);\n"
+        css += "    color: var(--theme-text);\n"
+        css += "}\n\n"
+
+        # Titres
+        css += ".style-transferred h1, .style-transferred h2, .style-transferred h3 {\n"
+        css += "    color: var(--theme-primary);\n"
+        css += "}\n\n"
+        
+        # Liens
+        css += ".style-transferred a {\n"
+        css += "    color: var(--theme-link);\n"
+        css += "}\n\n"
+        
+        # Remplacement des styles du template de base
+        css += ".style-transferred .container { background: var(--theme-bg); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }\n"
+        css += ".style-transferred .header { border-bottom-color: var(--theme-primary); }\n"
+        css += ".style-transferred .faq-section { border-left-color: var(--theme-secondary); }\n"
         
         return css
 
-def create_download_link(content: str, filename: str) -> str:
-    """Crée un lien de téléchargement"""
-    b64 = base64.b64encode(content.encode()).decode()
-    return f'<a href="data:text/html;base64,{b64}" download="{filename}" style="text-decoration: none; background: #ff6b6b; color: white; padding: 10px 20px; border-radius: 8px; display: inline-block; margin: 10px 0;">📥 Télécharger {filename}</a>'
+    def apply_style_transfer(self, target_html: str, fingerprint: StyleFingerprint) -> str:
+        """Applique l'empreinte stylistique à un HTML cible."""
+        logger.info("Application du transfert de style.")
+        css_rules = self.generate_transfer_css(fingerprint)
+        soup = BeautifulSoup(target_html, 'html.parser')
 
-def display_color_palette(colors: List[str]):
-    """Affiche une palette de couleurs"""
-    if not colors:
-        return
-    
-    palette_html = '<div class="color-palette">'
-    for color in colors:
-        palette_html += f'<div class="color-swatch" style="background-color: {color}" title="{color}"></div>'
-    palette_html += '</div>'
-    
-    st.markdown(palette_html, unsafe_allow_html=True)
+        # Supprimer les anciens styles pour éviter les conflits
+        for style_tag in soup.find_all('style'):
+            style_tag.decompose()
 
-def display_fingerprint(fingerprint: StyleFingerprint):
-    """Affiche l'empreinte stylistique"""
-    st.markdown(f"""
-    <div class="fingerprint-card">
-        <h3>🎨 Empreinte Stylistique Extraite</h3>
-        <div class="stat-grid">
-            <div><strong>Couleurs:</strong> {len(fingerprint.color_palette)}</div>
-            <div><strong>Typographie:</strong> {len(fingerprint.typography.get('font_families', []))} polices</div>
-            <div><strong>Confiance:</strong> {fingerprint.confidence_score:.0%}</div>
-            <div><strong>Ambiance:</strong> {fingerprint.design_mood}</div>
-        </div>
+        # Ajouter les nouvelles règles CSS
+        new_style_tag = soup.new_tag('style')
+        new_style_tag.string = css_rules
+        if soup.head:
+            soup.head.append(new_style_tag)
+        else:
+            # Créer <head> s'il n'existe pas
+            head = soup.new_tag('head')
+            soup.insert(0, head)
+            head.append(new_style_tag)
+
+        # Appliquer une classe au body pour activer les nouveaux styles
+        if soup.body:
+            soup.body['class'] = soup.body.get('class', []) + ['style-transferred']
+
+        return str(soup)
+
+
+# --- SECTION 2: LOGIQUE DE CONVERSION PDF (Coeur du 1er script) ---
+
+@dataclass
+class ConversionResult:
+    """Résultat de la conversion."""
+    html_content: str
+    seo_metrics: Dict[str, Any]
+    processing_time: float
+    word_count: int
+
+class PDFConverterApp:
+    """Classe principale de l'application Streamlit."""
+    
+    def __init__(self, openai_key: Optional[str] = None, anthropic_key: Optional[str] = None):
+        self.openai_client = openai.AsyncOpenAI(api_key=openai_key) if openai_key else None
+        self.anthropic_client = AsyncAnthropic(api_key=anthropic_key) if anthropic_key else None
+        self.api_keys_provided = bool(openai_key or anthropic_key)
+
+    def extract_pdf_content(self, pdf_file) -> Optional[Dict[str, Any]]:
+        """Extrait le contenu texte, les métadonnées et les tableaux d'un PDF."""
+        try:
+            pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
+            content = {
+                'text': "".join(page.get_text() for page in pdf_document),
+                'pages': pdf_document.page_count,
+                'metadata': pdf_document.metadata,
+                'tables': []
+            }
+            # ... (logique d'extraction de tableaux plus avancée si nécessaire) ...
+            pdf_document.close()
+            content['word_count'] = len(content['text'].split())
+            return content
+        except Exception as e:
+            st.error(f"Erreur lors de l'extraction du contenu PDF : {e}")
+            return None
+    
+    async def analyze_content_with_ai(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyse le contenu avec une IA pour générer une structure SEO."""
+        if not self.api_keys_provided:
+            st.info("Mode simulation (pas de clé API). L'analyse IA est simulée.")
+            return self._simulate_ai_analysis(content)
+        
+        text_sample = content['text'][:4000]
+        prompt = f"""
+        Analyse le contenu de ce document PDF et génère une structure sémantique et SEO optimisée.
+        Texte: "{text_sample}"
+        
+        Retourne un JSON valide avec les clés suivantes :
+        - "title": Un titre SEO concis et percutant (max 60 caractères).
+        - "meta_description": Une méta-description engageante (max 160 caractères).
+        - "h1": Le titre principal de la page (H1).
+        - "sections": Une liste d'objets, chacun avec "title" (pour un H2) et "content" (un paragraphe résumé de la section).
+        - "keywords": Une liste de 5 à 7 mots-clés pertinents.
+        - "faq": Une liste de 2 à 3 questions fréquentes (objets avec "question" et "answer").
+        """
+        
+        try:
+            if self.openai_client:
+                response = await self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo-1106",
+                    response_format={"type": "json_object"},
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.4
+                )
+                return json.loads(response.choices[0].message.content)
+            elif self.anthropic_client:
+                # La logique pour Claude serait ici, potentiellement avec un formattage différent
+                st.warning("L'analyse avec Claude n'est pas entièrement implémentée pour le JSON. Utilisation de la simulation.")
+                return self._simulate_ai_analysis(content)
+        except Exception as e:
+            st.warning(f"Erreur de l'API IA, passage en mode simulation : {e}")
+            return self._simulate_ai_analysis(content)
+
+    def _simulate_ai_analysis(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """Simulation d'analyse IA pour la démo sans API."""
+        text = content['text']
+        first_words = ' '.join(text.split()[:10])
+        title = f"Document : {first_words[:40]}..."
+        return {
+            'title': title[:60],
+            'meta_description': f"Document de {content['word_count']} mots, converti et structuré automatiquement.",
+            'h1': title,
+            'sections': [{'title': 'Résumé Principal', 'content': text[:800] + '...'}],
+            'keywords': ['document', 'pdf', 'conversion', 'html', 'analyse'],
+            'faq': [{'question': 'Quel est le sujet de ce document ?', 'answer': 'Ce document a été généré automatiquement.'}]
+        }
+    
+    def generate_html(self, content: Dict[str, Any], analysis: Dict[str, Any]) -> str:
+        """Génère le HTML final à partir d'un template Jinja2."""
+        html_template = Template("""
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ analysis.title }}</title>
+    <meta name="description" content="{{ analysis.meta_description }}">
+    <meta name="keywords" content="{{ analysis.keywords | join(', ') }}">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org", "@type": "Article", "headline": "{{ analysis.h1 }}",
+        "description": "{{ analysis.meta_description }}", "author": {"@type": "Organization", "name": "PDF Converter"},
+        "datePublished": "{{ current_date }}"
+    }
+    </script>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; background: #fdfdff; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .header { border-bottom: 2px solid #007bff; padding-bottom: 15px; margin-bottom: 25px; }
+        h1, h2, h3 { color: #333; }
+        .faq-section { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 30px; border-left: 4px solid #17a2b8; }
+        .faq-item { margin-bottom: 15px; } .faq-question { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header"><h1>{{ analysis.h1 }}</h1></header>
+        <main>
+            {% for section in analysis.sections %}
+            <section><h2>{{ section.title }}</h2><p>{{ section.content | replace('\\n', '<br>') }}</p></section>
+            {% endfor %}
+        </main>
+        {% if analysis.faq %}
+        <section class="faq-section">
+            <h2>Questions fréquentes</h2>
+            {% for item in analysis.faq %}
+            <div class="faq-item">
+                <div class="faq-question">{{ item.question }}</div><div>{{ item.answer }}</div>
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
     </div>
-    """, unsafe_allow_html=True)
+</body>
+</html>
+        """)
+        return html_template.render(
+            content=content, analysis=analysis, current_date=datetime.now().strftime("%Y-%m-%d")
+        )
+    
+    async def convert(self, pdf_file, style_reference_url: Optional[str] = None) -> Optional[ConversionResult]:
+        """Processus de conversion complet, incluant le transfert de style optionnel."""
+        start_time = datetime.now()
+        
+        content = self.extract_pdf_content(pdf_file)
+        if not content: return None
+        
+        analysis = await self.analyze_content_with_ai(content)
+        
+        html_content = self.generate_html(content, analysis)
+        
+        # --- Étape de Transfert de Style ---
+        if style_reference_url:
+            with st.spinner(f"Analyse du style de {style_reference_url}..."):
+                try:
+                    # Utilise les mêmes clés API que pour l'analyse de contenu
+                    openai_key = self.openai_client.api_key if self.openai_client else None
+                    anthropic_key = self.anthropic_client.api_key if self.anthropic_client else None
+                    
+                    async with WebStyleAnalyzer(openai_key, anthropic_key) as style_analyzer:
+                        fingerprint = await style_analyzer.analyze_reference_page(style_reference_url)
+                        if fingerprint.confidence_score > 0:
+                            st.success(f"Empreinte de style capturée (Confiance: {fingerprint.confidence_score:.0%})")
+                            html_content = style_analyzer.apply_style_transfer(html_content, fingerprint)
+                        else:
+                            st.warning("Impossible d'extraire une empreinte de style fiable de l'URL.")
+                except Exception as e:
+                    st.error(f"Erreur lors du transfert de style : {e}")
+
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        return ConversionResult(
+            html_content=html_content,
+            seo_metrics={
+                'title_length': len(analysis.get('title', '')),
+                'description_length': len(analysis.get('meta_description', '')),
+            },
+            processing_time=processing_time,
+            word_count=content['word_count']
+        )
+
+# --- SECTION 3: INTERFACE UTILISATEUR STREAMLIT ---
+
+def create_download_link(content: str, filename: str) -> str:
+    """Crée un lien de téléchargement pour le contenu HTML."""
+    b64 = base64.b64encode(content.encode()).decode()
+    return f'<a href="data:text/html;base64,{b64}" download="{filename}" style="text-decoration: none; background-color: #007bff; color: white; padding: 10px 15px; border-radius: 5px;">📥 Télécharger le fichier HTML</a>'
 
 def main():
-    # Header principal
+    """Fonction principale qui exécute l'interface Streamlit."""
+    # Styles CSS pour l'interface
     st.markdown("""
-    <div class="main-header">
-        <h1>🎨 Neural Style Transfer</h1>
-        <p>Extraction et application intelligente de styles visuels avec IA</p>
-    </div>
+    <style>
+        .main-header {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem; border-radius: 10px; color: white;
+            text-align: center; margin-bottom: 2rem;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 24px;
+        }
+    </style>
     """, unsafe_allow_html=True)
+
+    # En-tête
+    st.markdown('<div class="main-header"><h1>🎨 PDF to HTML Style Converter</h1><p>Conversion intelligente avec optimisation SEO et transfert de style via IA</p></div>', unsafe_allow_html=True)
     
-    # Vérification des dépendances
-    if MISSING_DEPS:
-        st.markdown(f"""
-        <div class="warning-box">
-            <h4>⚠️ Dépendances manquantes</h4>
-            <p>Certaines fonctionnalités ne seront pas disponibles :</p>
-            <ul>{"".join(f"<li>{dep}</li>" for dep in MISSING_DEPS)}</ul>
-            <p><strong>Installation :</strong><br>
-            <code>pip install aiohttp beautifulsoup4 tinycss2 webcolors PyMuPDF Pillow openai anthropic numpy scikit-learn</code></p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Sidebar de configuration
+    # Barre latérale pour la configuration
     with st.sidebar:
         st.header("⚙️ Configuration")
         
-        # Fonctionnalités disponibles
-        st.subheader("🔧 Fonctionnalités")
-        for feature, available in FEATURES.items():
-            icon = "✅" if available else "❌"
-            st.write(f"{icon} {feature.replace('_', ' ').title()}")
+        st.subheader("🔑 Clés API (Optionnel)")
+        openai_key = st.text_input("Clé API OpenAI", type="password", help="Requis pour une analyse de contenu de haute qualité.")
+        anthropic_key = st.text_input("Clé API Anthropic", type="password", disabled=True)
         
-        st.divider()
+        st.markdown("---")
         
-        # Configuration IA
-        use_ai = st.checkbox("Utiliser l'IA pour l'analyse", value=False,
-                           help="Activez si vous avez des clés API")
-        
-        openai_key = None
-        anthropic_key = None
-        
-        if use_ai:
-            st.subheader("🔑 Clés API")
-            if FEATURES['ai_openai']:
-                openai_key = st.text_input("OpenAI API Key", type="password")
-            if FEATURES['ai_anthropic']:
-                anthropic_key = st.text_input("Anthropic API Key", type="password")
-            
-            if not openai_key and not anthropic_key:
-                st.info("💡 Mode démo activé sans IA")
-        
-        st.divider()
-        
-        # Statistiques
-        st.subheader("📊 Statistiques")
-        if 'analysis_count' not in st.session_state:
-            st.session_state.analysis_count = 0
-        if 'transfer_count' not in st.session_state:
-            st.session_state.transfer_count = 0
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Analyses", st.session_state.analysis_count)
-        with col2:
-            st.metric("Transferts", st.session_state.transfer_count)
-    
-    # Interface principale
-    tabs = st.tabs(["🔍 Analyser", "🎯 Transférer", "📊 Résultats"])
-    
-    with tabs[0]:
-        st.subheader("🔍 Analyse de Style de Référence")
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            # Options d'entrée
-            input_type = st.radio(
-                "Type de source :",
-                ["URL Web", "HTML Direct", "PDF Local", "PDF URL"],
-                horizontal=True
+        # --- NOUVELLE SECTION POUR LE TRANSFERT DE STYLE ---
+        st.header("🎨 Transfert de Style")
+        enable_style_transfer = st.checkbox("Activer le transfert de style", value=False)
+        style_reference_url = ""
+        if enable_style_transfer:
+            style_reference_url = st.text_input(
+                "URL de référence pour le style",
+                placeholder="https://votre-site.com",
+                help="L'application extraira les couleurs et polices de cette URL pour les appliquer au document."
             )
-            
-            if input_type == "URL Web":
-                source_url = st.text_input(
-                    "URL de la page à analyser",
-                    placeholder="https://example.com",
-                    help="URL complète de la page web"
-                )
-                is_url, is_pdf = True, False
-                source_input = source_url
-                
-            elif input_type == "HTML Direct":
-                source_html = st.text_area(
-                    "Code HTML",
-                    height=200,
-                    placeholder="<html>...</html>"
-                )
-                is_url, is_pdf = False, False
-                source_input = source_html
-                
-            elif input_type == "PDF Local":
-                pdf_file = st.file_uploader("Fichier PDF", type=['pdf'])
-                is_url, is_pdf = False, True
-                source_input = pdf_file
-                
-            else:  # PDF URL
-                pdf_url = st.text_input(
-                    "URL du PDF",
-                    placeholder="https://example.com/document.pdf"
-                )
-                is_url, is_pdf = True, True
-                source_input = pdf_url
-        
-        with col2:
-            st.markdown("""
-            <div class="info-box">
-                <h4>💡 Conseils</h4>
-                <ul>
-                    <li>Utilisez des sites bien conçus comme référence</li>
-                    <li>Les PDF fonctionnent pour les couleurs de base</li>
-                    <li>L'IA améliore la qualité d'analyse</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Bouton d'analyse
-        if st.button("🚀 Lancer l'Analyse", type="primary", use_container_width=True):
-            if source_input:
-                app = StyleTransferApp(openai_key, anthropic_key)
-                
-                with st.spinner("Analyse en cours..."):
-                    try:
-                        # Pour les fichiers PDF uploadés, on doit gérer différemment
-                        if input_type == "PDF Local" and pdf_file:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
-                                tmp.write(pdf_file.read())
-                                tmp_path = tmp.name
-                            
-                            fingerprint = asyncio.run(
-                                app.analyze_reference_page(tmp_path, is_url=False, is_pdf=True)
-                            )
-                            os.unlink(tmp_path)
-                        else:
-                            fingerprint = asyncio.run(
-                                app.analyze_reference_page(source_input, is_url, is_pdf)
-                            )
-                        
-                        if fingerprint:
-                            st.session_state.analysis_count += 1
-                            st.session_state.current_fingerprint = fingerprint
-                            
-                            st.markdown("""
-                            <div class="success-box">
-                                ✅ <strong>Analyse terminée avec succès !</strong>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Affichage de l'empreinte
-                            display_fingerprint(fingerprint)
-                            
-                            # Détails de l'analyse
-                            with st.expander("📋 Détails de l'analyse"):
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    st.write("**🎨 Palette de couleurs:**")
-                                    display_color_palette(fingerprint.color_palette)
-                                    
-                                    if fingerprint.color_palette:
-                                        for i, color in enumerate(fingerprint.color_palette[:5]):
-                                            st.write(f"{i+1}. {color}")
-                                
-                                with col2:
-                                    st.write("**📝 Typographie:**")
-                                    fonts = fingerprint.typography.get('font_families', [])
-                                    if fonts:
-                                        for font in fonts[:5]:
-                                            st.write(f"• {font}")
-                                    
-                                    st.write("**📊 Métadonnées:**")
-                                    if fingerprint.metadata_profile:
-                                        st.write(f"Titre: {fingerprint.metadata_profile.get('title', 'N/A')[:50]}...")
-                        
-                        else:
-                            st.error("❌ Échec de l'analyse")
-                    
-                    except Exception as e:
-                        st.error(f"❌ Erreur: {e}")
-            else:
-                st.warning("⚠️ Veuillez fournir une source à analyser")
+
+    # Zone principale pour l'upload
+    st.subheader("📤 1. Choisissez un fichier PDF")
+    uploaded_file = st.file_uploader(
+        "Sélectionnez un fichier PDF à convertir",
+        type=['pdf'],
+        label_visibility="collapsed"
+    )
     
-    with tabs[1]:
-        st.subheader("🎯 Transfert de Style")
+    # Traitement du fichier
+    if uploaded_file:
+        st.subheader("🚀 2. Résultat de la Conversion")
         
-        if 'current_fingerprint' not in st.session_state:
-            st.info("🔍 Veuillez d'abord analyser une source de référence dans l'onglet 'Analyser'")
-        else:
-            fingerprint = st.session_state.current_fingerprint
-            
-            # Affichage de l'empreinte actuelle
-            st.write("**🎨 Empreinte actuelle:**")
-            display_fingerprint(fingerprint)
-            
-            st.divider()
-            
-            # HTML cible
-            st.write("**📄 HTML Cible:**")
-            target_html = st.text_area(
-                "Code HTML à styliser",
-                height=300,
-                placeholder="""<!DOCTYPE html>
-<html>
-<head><title>Ma Page</title></head>
-<body>
-    <h1>Titre Principal</h1>
-    <p>Contenu de la page...</p>
-    <a href="#">Lien</a>
-</body>
-</html>""",
-                help="HTML sur lequel appliquer le style"
-            )
-            
-            if st.button("🎨 Appliquer le Transfert", type="primary", use_container_width=True):
-                if target_html.strip():
-                    app = StyleTransferApp(openai_key, anthropic_key)
-                    
-                    with st.spinner("Application du style..."):
-                        try:
-                            styled_html = asyncio.run(
-                                app.apply_style_transfer(target_html, fingerprint)
-                            )
-                            
-                            st.session_state.transfer_count += 1
-                            st.session_state.styled_html = styled_html
-                            
-                            st.markdown("""
-                            <div class="success-box">
-                                ✅ <strong>Style appliqué avec succès !</strong>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Affichage du résultat
-                            with st.expander("👀 Aperçu du résultat", expanded=True):
-                                st.components.v1.html(styled_html, height=400, scrolling=True)
-                            
-                            # Code source
-                            with st.expander("💻 Code HTML généré"):
-                                st.code(styled_html, language='html')
-                                
-                                # Lien de téléchargement
-                                st.markdown(
-                                    create_download_link(styled_html, "styled-page.html"),
-                                    unsafe_allow_html=True
-                                )
-                        
-                        except Exception as e:
-                            st.error(f"❌ Erreur lors du transfert: {e}")
-                else:
-                    st.warning("⚠️ Veuillez fournir du code HTML")
-    
-    with tabs[2]:
-        st.subheader("📊 Historique et Résultats")
+        converter = PDFConverterApp(openai_key, anthropic_key)
         
-        if 'current_fingerprint' not in st.session_state:
-            st.info("Aucune analyse disponible pour le moment.")
-        else:
-            fingerprint = st.session_state.current_fingerprint
-            
-            # Métriques globales
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Couleurs Extraites", len(fingerprint.color_palette))
-            with col2:
-                st.metric("Score de Confiance", f"{fingerprint.confidence_score:.0%}")
-            with col3:
-                st.metric("Analyses Totales", st.session_state.analysis_count)
-            with col4:
-                st.metric("Transferts Réussis", st.session_state.transfer_count)
-            
-            st.divider()
-            
-            # Analyse détaillée
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**🎨 Analyse Colorimétrique:**")
-                if fingerprint.color_palette:
-                    display_color_palette(fingerprint.color_palette)
+        with st.spinner("Analyse du PDF et conversion en cours..."):
+            try:
+                # Lancer la conversion asynchrone
+                result = asyncio.run(converter.convert(uploaded_file, style_reference_url if enable_style_transfer else None))
+                
+                if result:
+                    st.success(f"Conversion réussie en {result.processing_time:.2f} secondes !")
                     
-                    # Graphique de répartition (simulation)
-                    chart_data = {
-                        'Couleur': fingerprint.color_palette[:5],
-                        'Usage': [30, 25, 20, 15, 10]  # Données simulées
-                    }
-                    st.bar_chart(chart_data, x='Couleur', y='Usage')
-                
-                st.write("**📱 Responsive Design:**")
-                if fingerprint.responsive_breakpoints:
-                    for bp in fingerprint.responsive_breakpoints:
-                        st.write(f"• {bp}px")
-            
-            with col2:
-                st.write("**📝 Profil Typographique:**")
-                fonts = fingerprint.typography.get('font_families', [])
-                for font in fonts:
-                    st.write(f"• {font}")
-                
-                st.write("**🏗️ Structure:**")
-                st.write(f"• Hiérarchie: {fingerprint.visual_hierarchy}")
-                st.write(f"• Espacement: Base {fingerprint.spacing_system.get('base_unit', 'N/A')}")
-                st.write(f"• Ambiance: {fingerprint.design_mood}")
-            
-            # Export des données
-            if st.button("💾 Exporter l'Analyse (JSON)"):
-                fingerprint_dict = {
-                    'color_palette': fingerprint.color_palette,
-                    'typography': fingerprint.typography,
-                    'confidence_score': fingerprint.confidence_score,
-                    'design_mood': fingerprint.design_mood,
-                    'export_date': datetime.now().isoformat()
-                }
-                
-                json_str = json.dumps(fingerprint_dict, indent=2)
-                st.download_button(
-                    "📥 Télécharger l'analyse",
-                    json_str,
-                    "style_analysis.json",
-                    "application/json"
-                )
-    
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center;'>
-        © 2025 Neural Style Transfer - Développé avec ❤️ par xAI
-    </div>
-    """, unsafe_allow_html=True)
+                    # Affichage des résultats dans des onglets
+                    tab1, tab2, tab3 = st.tabs(["🌐 Aperçu du Résultat", "💻 Code Source HTML", "📊 Métriques"])
+                    
+                    with tab1:
+                        st.components.v1.html(result.html_content, height=600, scrolling=True)
+                    
+                    with tab2:
+                        st.code(result.html_content, language='html')
+                        st.markdown(create_download_link(result.html_content, "converted_document.html"), unsafe_allow_html=True)
+                    
+                    with tab3:
+                        st.metric("Nombre de mots", f"{result.word_count}")
+                        st.metric("Longueur du Titre SEO", f"{result.seo_metrics['title_length']} caractères")
+                        st.metric("Longueur de la Méta-Description", f"{result.seo_metrics['description_length']} caractères")
+
+            except Exception as e:
+                st.error(f"Une erreur inattendue est survenue : {e}")
 
 if __name__ == "__main__":
     main()
