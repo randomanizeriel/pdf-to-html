@@ -562,8 +562,8 @@ async def main():
     """Fonction principale pour tester l'analyseur."""
     # Mettez vos clés API ici
     ai_config = {
-        'openai_api_key': "votre-cle-openai",
-        'anthropic_api_key': "votre-cle-anthropic"
+        'openai_api_key': st.secrets["votre-cle-openai"],
+        'anthropic_api_key': st.secrets["votre-cle-anthropic"]
     }
 
     # Exemple d'analyse d'une URL
