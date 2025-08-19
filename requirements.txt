@@ -1,16 +1,35 @@
-streamlit
-PyPDF2
-PyMuPDF
-openai
-anthropic
-aiohttp
-jinja2
-aiohttp>=3.8.1
-beautifulsoup4>=4.10.0
-tinycss2>=1.1.1
-webcolors>=1.11.1
-openai>=1.1.1
-scikit-learn>=1.0.0
-numpy>=1.21.0
-PyMuPDF>=1.23.0 # Pour 'fitz'
-Pillow>=9.0.0 # Utilisé par PyMuPDF pour la conversion d'images PIL
+# Interface utilisateur Streamlit
+streamlit>=1.28.0,<2.0.0
+
+# Bibliothèques d'analyse web et parsing HTML/CSS
+aiohttp>=3.8.0,<4.0.0
+beautifulsoup4>=4.11.0,<5.0.0
+tinycss2>=1.2.0,<2.0.0
+webcolors>=1.12.0,<2.0.0
+
+# IA et traitement de données
+openai>=1.0.0,<2.0.0
+anthropic>=0.7.0,<1.0.0
+numpy>=1.24.0,<2.0.0
+scikit-learn>=1.3.0,<2.0.0
+
+# Traitement des couleurs et images (optionnel pour extensions futures)
+# Pillow>=9.5.0,<11.0.0
+# opencv-python>=4.7.0,<5.0.0
+
+# Utilitaires Python standards (généralement inclus)
+# asyncio - inclus dans Python 3.7+
+# json - inclus dans la bibliothèque standard
+# re - inclus dans la bibliothèque standard
+# typing - inclus dans Python 3.5+
+# dataclasses - inclus dans Python 3.7+
+# logging - inclus dans la bibliothèque standard
+# pathlib - inclus dans Python 3.4+
+# base64 - inclus dans la bibliothèque standard
+# hashlib - inclus dans la bibliothèque standard
+# colorsys - inclus dans la bibliothèque standard
+# urllib.parse - inclus dans la bibliothèque standard
+# math - inclus dans la bibliothèque standard
+
+# Versions Python supportées
+# python>=3.8,<4.0
